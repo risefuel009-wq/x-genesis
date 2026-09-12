@@ -8,7 +8,6 @@ import { Select } from '@/components/ui/select';
 import { Skeleton, SkeletonTable } from '@/components/ui/skeleton';
 import { api } from '@/lib/supabase';
 import {
-  import {
   STAGES,
   type Candidate,
   type Application,
