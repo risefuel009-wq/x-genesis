@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
-import { ButtonHTMLAttributes, forwardRef } from 'react';
+import React, { ButtonHTMLAttributes, forwardRef } from 'react';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'outline' | 'danger';
 type Size = 'sm' | 'md' | 'lg';
@@ -9,6 +9,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
   size?: Size;
   loading?: boolean;
+  asChild?: boolean;
 }
 
 const variants: Record<Variant, string> = {
@@ -26,22 +27,35 @@ const sizes: Record<Size, string> = {
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = 'primary', size = 'md', loading, disabled, children, ...props }, ref) => {
+  ({ className, variant = 'primary', size = 'md', loading, disabled, children, asChild, ...props }, ref) => {
+    const classes = cn(
+      'inline-flex items-center justify-center gap-2 rounded-md transition-all duration-150',
+      'disabled:opacity-40 disabled:cursor-not-allowed',
+      'focus:outline-none focus:ring-2 focus:ring-gold-500/20',
+      variants[variant],
+      sizes[size],
+      className
+    );
+
+    if (loading) {
+      return (
+        <button ref={ref} disabled className={classes} {...props}>
+          <Loader2 className="h-4 w-4 animate-spin" />
+          {children}
+        </button>
+      );
+    }
+
+    if (asChild && React.isValidElement(children)) {
+      return React.cloneElement(children as React.ReactElement<any>, {
+        className: cn(classes, (children as any).props.className),
+        ref,
+        ...props,
+      });
+    }
+
     return (
-      <button
-        ref={ref}
-        disabled={disabled || loading}
-        className={cn(
-          'inline-flex items-center justify-center gap-2 rounded-md transition-all duration-150',
-          'disabled:opacity-40 disabled:cursor-not-allowed',
-          'focus:outline-none focus:ring-2 focus:ring-gold-500/20',
-          variants[variant],
-          sizes[size],
-          className
-        )}
-        {...props}
-      >
-        {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+      <button ref={ref} disabled={disabled} className={classes} {...props}>
         {children}
       </button>
     );
