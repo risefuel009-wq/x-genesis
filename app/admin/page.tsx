@@ -8,14 +8,19 @@ import { Select } from '@/components/ui/select';
 import { Skeleton, SkeletonTable } from '@/components/ui/skeleton';
 import { api } from '@/lib/supabase';
 import {
+  import {
   STAGES,
-  STAGE_LABELS,
-  STAGE_COLORS,
   type Candidate,
   type Application,
   type Offer,
 } from '@/lib/types';
-import { formatCurrency, formatDate, cn } from '@/lib/utils';
+import {
+  formatCurrency,
+  formatDate,
+  cn,
+  STAGE_LABELS,
+  STAGE_COLORS,
+} from '@/lib/utils';
 import {
   Users,
   TrendingUp,
