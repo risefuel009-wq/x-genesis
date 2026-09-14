@@ -53,14 +53,18 @@ export function filterOffersForCandidate(
     language: string;
     level: string;
     gradStatus: string;
+    experience: number;
   }
 ) {
   return offers.filter((offer) => {
+    if (offer.status !== 'active') return false;
     if (offer.language !== candidate.language) return false;
     const age = candidate.age;
     if (age && (age < offer.min_age || age > offer.max_age)) return false;
     if (!levelGte(candidate.level, offer.min_language_level)) return false;
     if (!offer.accepts_students && candidate.gradStatus === 'undergrad') return false;
+    const need = offer.min_experience_years || 0;
+    if (need > 0 && candidate.experience < need) return false;
     return true;
   });
 }
