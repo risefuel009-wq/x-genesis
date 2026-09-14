@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,7 @@ import {
   LEVELS,
   GRAD_STATUS,
   MILITARY_STATUS,
+  experienceLabel,
   type Offer,
 } from '@/lib/types';
 import {
@@ -21,9 +22,10 @@ import {
   generateTrackingCode,
   cn,
 } from '@/lib/utils';
-import { Check, Mic, ArrowRight, ArrowLeft, Loader2 } from 'lucide-react';
+import { Check, Mic, ArrowRight, Loader2, Copy, MessageCircle, Star } from 'lucide-react';
 
 const STORAGE_KEY = 'xg_apply_draft';
+const ADMIN_WHATSAPP = '01207706309';
 
 const gradLabels: Record<string, string> = {
   undergrad: 'طالب',
@@ -39,6 +41,13 @@ const militaryLabels: Record<string, string> = {
   in_service: 'في الخدمة حالياً',
 };
 
+const experienceOptions = [
+  { value: '0', label: 'بدون خبرة' },
+  { value: '1', label: 'سنة' },
+  { value: '2', label: 'سنتين' },
+  { value: '3', label: '3+ سنين' },
+];
+
 export default function ApplyPage() {
   const [step, setStep] = useState(0);
   const [offers, setOffers] = useState<Offer[]>([]);
@@ -47,6 +56,9 @@ export default function ApplyPage() {
   const [error, setError] = useState<string | null>(null);
   const [trackingCode, setTrackingCode] = useState<string | null>(null);
   const [restored, setRestored] = useState(false);
+  const [preferredId, setPreferredId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const prefApplied = useRef(false);
 
   const [form, setForm] = useState({
     triple_name: '',
@@ -60,6 +72,7 @@ export default function ApplyPage() {
     grad_status: '',
     military_status: '',
     applied_last_3_months: false,
+    experience: '0',
     voice_url: '',
     voice_confirmed: false,
   });
@@ -67,6 +80,10 @@ export default function ApplyPage() {
   const [picked, setPicked] = useState<string[]>([]);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const oid = params.get('offer_id');
+    if (oid) setPreferredId(oid);
+
     api
       .getActiveOffers()
       .then(setOffers)
@@ -101,8 +118,22 @@ export default function ApplyPage() {
       language: form.language,
       level: form.language_level,
       gradStatus: form.grad_status,
+      experience: parseInt(form.experience || '0', 10),
     });
   }, [offers, form]);
+
+  useEffect(() => {
+    if (!preferredId || prefApplied.current) return;
+    if (matches.some((m) => m.id === preferredId)) {
+      setPicked((p) => (p.includes(preferredId) ? p : [...p, preferredId]));
+      prefApplied.current = true;
+    }
+  }, [matches, preferredId]);
+
+  const preferredOffer = useMemo(
+    () => offers.find((o) => o.id === preferredId) || null,
+    [offers, preferredId]
+  );
 
   const s1Valid =
     form.triple_name.trim().length >= 5 &&
@@ -132,6 +163,7 @@ export default function ApplyPage() {
         grad_status: form.grad_status,
         military_status: form.military_status,
         applied_last_3_months: form.applied_last_3_months,
+        experience_years: parseInt(form.experience || '0', 10),
         voice_url: form.voice_url,
         voice_confirmed: form.voice_confirmed,
       });
@@ -142,6 +174,7 @@ export default function ApplyPage() {
             candidate_id: candidate.id,
             offer_id,
             stage: 'new',
+            is_preferred: offer_id === preferredId,
           })
         )
       );
@@ -155,24 +188,77 @@ export default function ApplyPage() {
     }
   };
 
+  const whatsappMessage = useMemo(() => {
+    if (!trackingCode) return '';
+    const pickedNames = offers
+      .filter((o) => picked.includes(o.id))
+      .map((o) => `${o.companies?.name} - ${o.account_name}`)
+      .join(' | ');
+    return [
+      'مرحباً X-Genesis 👋',
+      `الاسم: ${form.triple_name}`,
+      `الموبايل: ${form.phone}`,
+      `كود المتابعة: ${trackingCode}`,
+      `الوظائف المقدم عليها: ${pickedNames || '—'}`,
+      preferredOffer && picked.includes(preferredOffer.id)
+        ? `الوظيفة المفضلة: ${preferredOffer.companies?.name} - ${preferredOffer.account_name} ⭐`
+        : '',
+      `اللغة: ${form.language} ${form.language_level}`,
+      `الخبرة: ${experienceLabel(parseInt(form.experience || '0', 10))}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }, [trackingCode, offers, picked, form, preferredOffer]);
+
+  const copyMessage = async () => {
+    try {
+      await navigator.clipboard.writeText(whatsappMessage);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  };
+
   if (trackingCode) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-midnight-950 p-6">
+      <main className="flex min-h-screen items-center justify-center bg-midnight-950 p-4 sm:p-6">
         <Card className="w-full max-w-md">
-          <CardContent className="pt-8 text-center">
-            <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full bg-emerald-500/10">
+          <CardContent className="space-y-4 pt-8 text-center">
+            <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-500/10">
               <Check className="h-8 w-8 text-emerald-400" />
             </div>
-            <h1 className="text-2xl font-bold text-zinc-100">
-              تم استلام تقديمك!
-            </h1>
-            <p className="mt-2 text-sm text-zinc-400">
-              كود المتابعة بتاعك — احتفظ بيه:
-            </p>
-            <div className="mt-4 rounded-lg border border-gold-500/20 bg-gold-500/5 py-4 text-2xl font-bold tracking-widest text-gold-400 tabular-nums">
+            <h1 className="text-2xl font-bold text-zinc-100">تم استلام تقديمك!</h1>
+            <p className="text-sm text-zinc-400">كود المتابعة بتاعك — احتفظ بيه:</p>
+            <div className="rounded-lg border border-gold-500/20 bg-gold-500/5 py-4 text-2xl font-bold tracking-widest text-gold-400 tabular-nums">
               {trackingCode}
             </div>
-            <p className="mt-6 text-xs leading-6 text-zinc-500">
+
+            <div className="rounded-lg border border-white/10 bg-midnight-900 p-3 text-right">
+              <div className="mb-2 text-xs font-medium text-zinc-400">
+                رسالة الواتساب الجاهزة للأدمن:
+              </div>
+              <pre className="max-h-40 overflow-auto whitespace-pre-wrap text-xs leading-6 text-zinc-300">
+                {whatsappMessage}
+              </pre>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Button variant="primary" size="lg" className="w-full" onClick={copyMessage}>
+                <Copy className="h-4 w-4" />
+                {copied ? 'تم النسخ ✅' : 'نسخ الرسالة'}
+              </Button>
+              <Button variant="outline" size="lg" className="w-full" asChild>
+                <a
+                  href={`https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(whatsappMessage)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  فتح واتساب وإرسال
+                </a>
+              </Button>
+            </div>
+
+            <p className="text-xs leading-6 text-zinc-500">
               هنكلمك واتساب خلال 48 ساعة لو اتقبلت في المراجعة الأولية.
               <br />
               بالتوفيق! 🍀
@@ -186,7 +272,7 @@ export default function ApplyPage() {
   return (
     <main className="min-h-screen bg-midnight-950" dir="rtl">
       <header className="border-b border-white/[0.06] bg-midnight-950/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-2xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-4 sm:px-6">
           <div className="flex items-center gap-3">
             <div className="grid h-8 w-8 place-items-center rounded-md bg-gradient-to-br from-gold-400 to-gold-600 font-bold text-midnight-950">
               X
@@ -201,10 +287,19 @@ export default function ApplyPage() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-2xl px-6 py-10">
+      <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-10">
         {restored && step === 0 && (
           <div className="mb-6 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3 text-center text-xs text-blue-300">
             👋 أهلًا بيك رجعت — بياناتك محفوظة، كمّل من وقفت.
+          </div>
+        )}
+
+        {preferredOffer && (
+          <div className="mb-6 flex items-center gap-2 rounded-lg border border-gold-500/20 bg-gold-500/5 p-3 text-xs text-gold-300">
+            <Star className="h-4 w-4 shrink-0" />
+            <span>
+              جيت من وظيفة: {preferredOffer.companies?.name} — {preferredOffer.account_name}. هتتسجل كوظيفة مفضلة ليك.
+            </span>
           </div>
         )}
 
@@ -229,7 +324,7 @@ export default function ApplyPage() {
               >
                 {label}
               </span>
-              {i < 2 && <div className="h-px w-6 bg-white/10" />}
+              {i < 2 && <div className="h-px w-4 bg-white/10 sm:w-6" />}
             </div>
           ))}
         </div>
@@ -241,7 +336,7 @@ export default function ApplyPage() {
                 label="الاسم الثلاثي *"
                 value={form.triple_name}
                 onChange={(e) => set('triple_name', e.target.value)}
-                placeholder="مثال: ي��سف علاء سعيد"
+                placeholder="مثال: يوسف علاء سعيد"
               />
               <div className="grid gap-4 md:grid-cols-2">
                 <Input
@@ -288,6 +383,12 @@ export default function ApplyPage() {
                   onChange={(e) => set('language_level', e.target.value)}
                   placeholder="اختر المستوى..."
                   options={LEVELS.map((l) => ({ value: l, label: l }))}
+                />
+                <Select
+                  label="سنين الخبرة"
+                  value={form.experience}
+                  onChange={(e) => set('experience', e.target.value)}
+                  options={experienceOptions}
                 />
                 <Input
                   label="الكلية"
@@ -355,7 +456,7 @@ export default function ApplyPage() {
                   <span className="font-semibold text-gold-400">
                     دقيقتين على الأقل
                   </span>{' '}
-                  — في مكان هادي. الصوت ده اللي هيخلّي ا��شركة تقبلك!
+                  — في مكان هادي.
                 </p>
               </div>
 
@@ -431,8 +532,7 @@ export default function ApplyPage() {
               <Card>
                 <CardContent className="py-8 text-center">
                   <p className="text-sm text-zinc-400">
-                    مفيش أوفر مطابق دلوقتي — بياناتك اتحفظت وهنكلمك أول ما
-                    يفتح أوفر يناسبك ❤️
+                    مفيش أوفر مطابق دلوقتي — بياناتك اتحفظت وهنكلمك أول ما يفتح أوفر يناسبك ❤️
                   </p>
                 </CardContent>
               </Card>
@@ -440,6 +540,7 @@ export default function ApplyPage() {
               <>
                 {matches.map((offer) => {
                   const isPicked = picked.includes(offer.id);
+                  const isPref = offer.id === preferredId;
                   return (
                     <Card
                       key={offer.id}
@@ -460,11 +561,17 @@ export default function ApplyPage() {
                       <CardContent className="pt-5">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                               <span className="font-semibold text-zinc-100">
                                 {offer.companies?.name}
                               </span>
-                              {isPicked && (
+                              {isPref && (
+                                <Badge variant="gold">
+                                  <Star className="h-3 w-3" />
+                                  مفضلة
+                                </Badge>
+                              )}
+                              {isPicked && !isPref && (
                                 <Badge variant="gold">
                                   <Check className="h-3 w-3" />
                                   مختارة
@@ -487,6 +594,12 @@ export default function ApplyPage() {
                             <span className="text-zinc-500">الشيفت: </span>
                             <span className="text-zinc-300">
                               {offer.shift_type || '—'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-zinc-500">الخبرة: </span>
+                            <span className="text-zinc-300">
+                              {experienceLabel(offer.min_experience_years || 0)}
                             </span>
                           </div>
                         </div>
