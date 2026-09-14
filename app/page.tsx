@@ -1,22 +1,24 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { Lock } from 'lucide-react';
+import { Lock, ChevronDown } from 'lucide-react';
 import { api } from '@/lib/supabase';
-import type { Offer } from '@/lib/types';
+import { experienceLabel, type Offer } from '@/lib/types';
+import { cn } from '@/lib/utils';
 
 export default function HomePage() {
   const [offers, setOffers] = useState<Offer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     api
-      .getActiveOffers()
+      .getAllOffers()
       .then((o) => {
         if (!cancelled) setOffers(o);
       })
@@ -28,6 +30,11 @@ export default function HomePage() {
       cancelled = true;
     };
   }, []);
+
+  const activeCount = useMemo(
+    () => offers.filter((o) => o.status === 'active').length,
+    [offers]
+  );
 
   return (
     <div className="min-h-screen bg-midnight-950">
@@ -50,12 +57,33 @@ export default function HomePage() {
             <Button variant="primary" size="sm" asChild>
               <a href="/apply">قدّم دلوقتي</a>
             </Button>
-            <Button variant="ghost" size="sm" asChild>
-              <a href="/recruiter">
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setMenuOpen((v) => !v)}
+              >
                 <Lock className="h-3 w-3" />
-                <span>ريكراتر</span>
-              </a>
-            </Button>
+                <span>دخول الفريق</span>
+                <ChevronDown className="h-3 w-3" />
+              </Button>
+              {menuOpen && (
+                <div className="absolute left-0 top-full mt-2 w-44 overflow-hidden rounded-md border border-white/10 bg-midnight-900 shadow-xl">
+                  <a
+                    href="/admin"
+                    className="block px-4 py-2.5 text-xs text-zinc-200 transition-colors hover:bg-midnight-800"
+                  >
+                    لوحة الأدمن
+                  </a>
+                  <a
+                    href="/recruiter"
+                    className="block px-4 py-2.5 text-xs text-zinc-200 transition-colors hover:bg-midnight-800"
+                  >
+                    بوابة الريكراتر
+                  </a>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -66,7 +94,7 @@ export default function HomePage() {
             ابدأ مسيرتك المهنية.
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
-            أكثر من {offers.length} فرصة عمل متاحة دلوقتي في أقوى الشركات. قدّم في دقيقة واحدة — مفيش فورمات خارجية، مفيش تعقيد.
+            {activeCount} فرصة عمل متاحة دلوقتي في أقوى الشركات. قدّم في دقيقة واحدة — مفيش فورمات خارجية، مفيش تعقيد.
           </p>
           <div className="mt-5">
             <Button variant="primary" size="lg" asChild>
@@ -76,8 +104,10 @@ export default function HomePage() {
         </section>
 
         <section className="mb-10">
-          <h2 className="text-lg font-semibold text-zinc-100">الفرص المتاحة الآن</h2>
-          <p className="text-xs text-zinc-500">{offers.length} فرصة نشطة · تُحدّث لحظياً</p>
+          <h2 className="text-lg font-semibold text-zinc-100">كل الوظائف</h2>
+          <p className="text-xs text-zinc-500">
+            {offers.length} وظيفة · {activeCount} متاحة الآن · الباقي موقوف مؤقتاً
+          </p>
         </section>
 
         {loading ? (
@@ -93,59 +123,84 @@ export default function HomePage() {
         ) : offers.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
-              <p className="text-sm text-zinc-400">مفيش فرص متاحة حالياً — عد تاني قريب!</p>
+              <p className="text-sm text-zinc-400">مفيش وظائف حالياً — عد تاني قريب!</p>
             </CardContent>
           </Card>
         ) : (
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {offers.map((offer) => (
-              <Card key={offer.id} className="transition-colors hover:border-white/10">
-                <CardContent className="space-y-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-semibold text-zinc-100">
-                        {offer.companies?.name}
+            {offers.map((offer) => {
+              const isActive = offer.status === 'active';
+              return (
+                <Card
+                  key={offer.id}
+                  className={cn(
+                    'transition-colors',
+                    isActive ? 'hover:border-white/10' : 'opacity-70'
+                  )}
+                >
+                  <CardContent className="space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-semibold text-zinc-100">
+                          {offer.companies?.name}
+                        </div>
+                        <div className="mt-0.5 truncate text-xs text-zinc-400">
+                          {offer.account_name}
+                        </div>
                       </div>
-                      <div className="mt-0.5 truncate text-xs text-zinc-400">
-                        {offer.account_name}
-                      </div>
+                      {isActive ? (
+                        <Badge variant="success">متاحة</Badge>
+                      ) : (
+                        <Badge variant="warning">موقوفة مؤقتاً</Badge>
+                      )}
                     </div>
-                    <Badge variant="success">متاحة</Badge>
-                  </div>
 
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <div className="text-zinc-500">الراتب</div>
-                      <div className="mt-0.5 font-medium text-gold-400">
-                        {offer.salary || 'عند المقابلة'}
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <div className="text-zinc-500">الراتب</div>
+                        <div className="mt-0.5 font-medium text-gold-400">
+                          {offer.salary || 'عند المقابلة'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-zinc-500">اللغة</div>
+                        <div className="mt-0.5 font-medium text-zinc-200">
+                          {offer.language} · {offer.min_language_level}+
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-zinc-500">المكان</div>
+                        <div className="mt-0.5 truncate font-medium text-zinc-200">
+                          {offer.location || '—'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-zinc-500">الشيفت</div>
+                        <div className="mt-0.5 truncate font-medium text-zinc-200">
+                          {offer.shift_type || '—'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-zinc-500">الخبرة</div>
+                        <div className="mt-0.5 font-medium text-zinc-200">
+                          {experienceLabel(offer.min_experience_years || 0)}
+                        </div>
                       </div>
                     </div>
-                    <div>
-                      <div className="text-zinc-500">اللغة</div>
-                      <div className="mt-0.5 font-medium text-zinc-200">
-                        {offer.language} · {offer.min_language_level}+
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-zinc-500">المكان</div>
-                      <div className="mt-0.5 truncate font-medium text-zinc-200">
-                        {offer.location || '—'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-zinc-500">الشيفت</div>
-                      <div className="mt-0.5 truncate font-medium text-zinc-200">
-                        {offer.shift_type || '—'}
-                      </div>
-                    </div>
-                  </div>
 
-                  <Button variant="primary" size="sm" className="w-full" asChild>
-                    <a href={`/apply?offer_id=${offer.id}`}>قدّم دلوقتي</a>
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
+                    {isActive ? (
+                      <Button variant="primary" size="sm" className="w-full" asChild>
+                        <a href={`/apply?offer_id=${offer.id}`}>قدّم دلوقتي</a>
+                      </Button>
+                    ) : (
+                      <div className="w-full rounded-md border border-white/5 bg-midnight-800/50 py-1.5 text-center text-xs text-zinc-500">
+                        التقديم متوقف مؤقتاً
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
 
