@@ -22,6 +22,7 @@ export type Offer = {
   min_language_level: string;
   salary: string | null;
   form_url: string | null;
+  min_experience_years: number;
   created_at: string;
   companies?: Company;
 };
@@ -39,6 +40,7 @@ export type Candidate = {
   grad_status: string | null;
   military_status: string | null;
   applied_last_3_months: boolean;
+  experience_years: number;
   voice_url: string | null;
   voice_confirmed: boolean;
   created_at: string;
@@ -49,6 +51,7 @@ export type Application = {
   candidate_id: string;
   offer_id: string;
   stage: 'new' | 'screening' | 'interview' | 'hired' | 'rejected';
+  is_preferred: boolean;
   notes: string | null;
   created_at: string;
   offers?: Offer;
@@ -66,3 +69,10 @@ export type Level = (typeof LEVELS)[number];
 export type GradStatus = (typeof GRAD_STATUS)[number];
 export type MilitaryStatus = (typeof MILITARY_STATUS)[number];
 export type Stage = (typeof STAGES)[number];
+
+export function experienceLabel(years: number): string {
+  if (!years || years <= 0) return 'بدون خبرة';
+  if (years === 1) return 'سنة خبرة';
+  if (years === 2) return 'سنتين خبرة';
+  return '3+ سنين خبرة';
+}
