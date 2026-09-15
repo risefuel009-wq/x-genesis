@@ -288,9 +288,26 @@ export default function ApplyPage() {
       </header>
 
       <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-10">
-        {restored && step === 0 && (
-          <div className="mb-6 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3 text-center text-xs text-blue-300">
-            👋 أهلًا بيك رجعت — بياناتك محفوظة، كمّل من وقفت.
+        {restored && step === 0 && (form.triple_name || form.phone) && (
+          <div className="mb-6 flex items-center justify-between gap-2 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3 text-xs text-blue-300">
+            <span>👋 أهلًا بيك رجعت — بياناتك محفوظة، كمّل من وقفت.</span>
+            <button
+              type="button"
+              className="shrink-0 rounded-md border border-white/10 px-2 py-1 text-[11px] text-zinc-300 hover:bg-midnight-800"
+              onClick={() => {
+                localStorage.removeItem(STORAGE_KEY);
+                setForm({
+                  triple_name: '', phone: '', email: '', age: '', site: 'cairo',
+                  language: 'English', language_level: '', college: '', grad_status: '',
+                  military_status: '', applied_last_3_months: false, experience: '0',
+                  voice_url: '', voice_confirmed: false,
+                });
+                setPicked([]);
+                setRestored(false);
+              }}
+            >
+              بدء من جديد
+            </button>
           </div>
         )}
 
