@@ -22,7 +22,12 @@ export default function HomePage() {
     api
       .getAllOffers()
       .then((o) => {
-        if (!cancelled) setOffers(o);
+        if (!cancelled)
+          setOffers(
+            [...o].sort((a, b) =>
+              a.status === b.status ? 0 : a.status === 'active' ? -1 : 1
+            )
+          );
       })
       .catch(() => {})
       .finally(() => {
