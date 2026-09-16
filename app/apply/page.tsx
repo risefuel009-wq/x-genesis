@@ -22,10 +22,9 @@ import {
   generateTrackingCode,
   cn,
 } from '@/lib/utils';
-import { Check, Mic, ArrowRight, Loader2, Copy, MessageCircle, Star } from 'lucide-react';
+import { Check, Mic, ArrowRight, Loader2, Star } from 'lucide-react';
 
 const STORAGE_KEY = 'xg_apply_draft';
-const ADMIN_WHATSAPP = '01207706309';
 
 const gradLabels: Record<string, string> = {
   undergrad: 'طالب',
@@ -57,7 +56,6 @@ export default function ApplyPage() {
   const [trackingCode, setTrackingCode] = useState<string | null>(null);
   const [restored, setRestored] = useState(false);
   const [preferredId, setPreferredId] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const prefApplied = useRef(false);
 
   const [form, setForm] = useState({
@@ -151,6 +149,7 @@ export default function ApplyPage() {
     setSubmitting(true);
     setError(null);
     try {
+      const code = generateTrackingCode();
       const [candidate] = await api.insertCandidate({
         triple_name: form.triple_name.trim(),
         phone: form.phone.trim(),
@@ -166,6 +165,7 @@ export default function ApplyPage() {
         experience_years: parseInt(form.experience || '0', 10),
         voice_url: form.voice_url,
         voice_confirmed: form.voice_confirmed,
+        tracking_code: code,
       });
 
       await Promise.all(
@@ -180,42 +180,12 @@ export default function ApplyPage() {
       );
 
       localStorage.removeItem(STORAGE_KEY);
-      setTrackingCode(generateTrackingCode());
+      setTrackingCode(code);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const whatsappMessage = useMemo(() => {
-    if (!trackingCode) return '';
-    const pickedNames = offers
-      .filter((o) => picked.includes(o.id))
-      .map((o) => `${o.companies?.name} - ${o.account_name}`)
-      .join(' | ');
-    return [
-      'مرحباً X-Genesis 👋',
-      `الاسم: ${form.triple_name}`,
-      `الموبايل: ${form.phone}`,
-      `كود المتابعة: ${trackingCode}`,
-      `الوظائف المقدم عليها: ${pickedNames || '—'}`,
-      preferredOffer && picked.includes(preferredOffer.id)
-        ? `الوظيفة المفضلة: ${preferredOffer.companies?.name} - ${preferredOffer.account_name} ⭐`
-        : '',
-      `اللغة: ${form.language} ${form.language_level}`,
-      `الخبرة: ${experienceLabel(parseInt(form.experience || '0', 10))}`,
-    ]
-      .filter(Boolean)
-      .join('\n');
-  }, [trackingCode, offers, picked, form, preferredOffer]);
-
-  const copyMessage = async () => {
-    try {
-      await navigator.clipboard.writeText(whatsappMessage);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {}
   };
 
   if (trackingCode) {
@@ -231,33 +201,9 @@ export default function ApplyPage() {
             <div className="rounded-lg border border-gold-500/20 bg-gold-500/5 py-4 text-2xl font-bold tracking-widest text-gold-400 tabular-nums">
               {trackingCode}
             </div>
-
-            <div className="rounded-lg border border-white/10 bg-midnight-900 p-3 text-right">
-              <div className="mb-2 text-xs font-medium text-zinc-400">
-                رسالة الواتساب الجاهزة للأدمن:
-              </div>
-              <pre className="max-h-40 overflow-auto whitespace-pre-wrap text-xs leading-6 text-zinc-300">
-                {whatsappMessage}
-              </pre>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <Button variant="primary" size="lg" className="w-full" onClick={copyMessage}>
-                <Copy className="h-4 w-4" />
-                {copied ? 'تم النسخ ✅' : 'نسخ الرسالة'}
-              </Button>
-              <Button variant="outline" size="lg" className="w-full" asChild>
-                <a
-                  href={`https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(whatsappMessage)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <MessageCircle className="h-4 w-4" />
-                  فتح واتساب وإرسال
-                </a>
-              </Button>
-            </div>
-
+            <p className="text-xs leading-6 text-zinc-500">
+              احتفظ بالكود ده — بيه تقدر تتابع حالة تقديمك في أي وقت، وفريقنا هيطلبه منك في أي تواصل.
+            </p>
             <p className="text-xs leading-6 text-zinc-500">
               هنكلمك واتساب خلال 48 ساعة لو اتقبلت في المراجعة الأولية.
               <br />
@@ -474,6 +420,9 @@ export default function ApplyPage() {
                     دقيقتين على الأقل
                   </span>{' '}
                   — في مكان هادي.
+                </p>
+                <p className="mt-2 rounded-md border border-gold-500/20 bg-gold-500/5 p-2 text-[11px] leading-5 text-gold-300">
+                  ⚠️ التسجيل بالإنجليزي إجباري لكل الوظائف — مهما كانت لغة الوظيفة نفسها.
                 </p>
               </div>
 
