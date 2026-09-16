@@ -46,12 +46,17 @@ import {
   Wallet,
   Briefcase,
   UserX,
+  CalendarDays,
+  Upload,
+  FileText,
 } from 'lucide-react';
 
 const ADMIN_PASSWORD = 'genesis2026';
 const AUTH_KEY = 'xg_admin_auth';
+const SITE = 'https://x-genesis-cu7j.vercel.app';
 
 type AppRow = Application & {
+  interview_at?: string | null;
   candidates: Candidate;
   offers: Offer & { companies?: Company };
 };
@@ -90,6 +95,9 @@ const expOptions = [
   { value: '3', label: '3+ سنين' },
 ];
 
+const daysSince = (iso: string) =>
+  Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+
 export default function AdminPage() {
   const [authed, setAuthed] = useState(false);
   const [password, setPassword] = useState('');
@@ -109,10 +117,17 @@ export default function AdminPage() {
 
   const [leaderMsg, setLeaderMsg] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
 
   const [offerForm, setOfferForm] = useState<typeof emptyOffer | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const [tplOffer, setTplOffer] = useState<Offer | null>(null);
+  const [tplText, setTplText] = useState('');
+
+  const [csvOpen, setCsvOpen] = useState(false);
+  const [csvText, setCsvText] = useState('');
 
   useEffect(() => {
     if (localStorage.getItem(AUTH_KEY) === ADMIN_PASSWORD) setAuthed(true);
@@ -160,6 +175,13 @@ export default function AdminPage() {
 
   const refreshCompanies = () =>
     api.getCompanies().then(setCompanies).catch(() => {});
+
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  const todayInterviews = useMemo(
+    () => apps.filter((a) => a.interview_at === todayStr),
+    [apps, todayStr]
+  );
 
   const filteredApps = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -218,6 +240,16 @@ export default function AdminPage() {
       `كود المتابعة: ${a.candidates?.tracking_code || '—'}`,
     ].join('\n');
 
+  const defaultTemplate = (o: Offer) =>
+    [
+      `🔥 فرصة جديدة: ${o.account_name} في ${o.companies?.name || ''}`,
+      `💰 الراتب: ${o.salary || 'عند المقابلة'}`,
+      `📍 المكان: ${o.location || '—'}`,
+      `⏰ الشيفت: ${o.shift_type || '—'}`,
+      `🗣 اللغة: ${o.language} ${o.min_language_level}+`,
+      `📝 قدّم من هنا: ${SITE}/apply?offer_id=${o.id}`,
+    ].join('\n');
+
   const updateStage = async (id: string, stage: string) => {
     try {
       await api.updateApplicationStage(id, stage);
@@ -226,6 +258,19 @@ export default function AdminPage() {
       );
     } catch (e) {
       alert('فشل التحديث: ' + (e as Error).message);
+    }
+  };
+
+  const setInterview = async (id: string, date: string) => {
+    try {
+      await supabase.update('applications', `id=eq.${id}`, {
+        interview_at: date || null,
+      });
+      setApps((list) =>
+        list.map((a) => (a.id === id ? { ...a, interview_at: date } : a))
+      );
+    } catch (e) {
+      alert('فشل حفظ الموعد: ' + (e as Error).message);
     }
   };
 
@@ -347,6 +392,78 @@ export default function AdminPage() {
     });
   };
 
+  const saveTemplate = async () => {
+    if (!tplOffer) return;
+    try {
+      await supabase.update('offers', `id=eq.${tplOffer.id}`, {
+        whatsapp_template: tplText,
+      });
+      setTplOffer(null);
+      await refreshOffers();
+    } catch (e) {
+      alert('فشل الحفظ: ' + (e as Error).message);
+    }
+  };
+
+  const importCSV = async () => {
+    const lines = csvText
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+    let added = 0;
+    let skipped = 0;
+    for (const line of lines) {
+      const p = line.split(',').map((s) => s.trim());
+      if (p.length < 2) {
+        skipped++;
+        continue;
+      }
+      const [companyName, account, salary, language, level, shift, location, status] = p;
+      let comp = companies.find(
+        (c) => c.name.toLowerCase() === companyName.toLowerCase()
+      );
+      if (!comp) {
+        try {
+          const rows = await supabase.insert<any>('companies', {
+            name: companyName,
+            recruiter_commission: 0,
+            team_leader_commission: 0,
+            unit_manager_commission: 0,
+            guarantee_days: 30,
+          });
+          comp = rows[0];
+        } catch {
+          skipped++;
+          continue;
+        }
+      }
+      try {
+        await supabase.insert('offers', {
+          company_id: comp.id,
+          account_name: account,
+          status: status === 'hold' ? 'hold' : 'active',
+          language: language || 'English',
+          min_language_level: level || 'B1',
+          salary: salary || null,
+          shift_type: shift || null,
+          location: location || null,
+          min_age: 18,
+          max_age: 45,
+          accepts_students: false,
+          min_experience_years: 0,
+        });
+        added++;
+      } catch {
+        skipped++;
+      }
+    }
+    setCsvOpen(false);
+    setCsvText('');
+    await refreshOffers();
+    await refreshCompanies();
+    alert(`تم إضافة ${added} وظيفة · تم تخطي ${skipped} سطر`);
+  };
+
   const exportCSV = () => {
     const rows = filteredApps.map((a) => ({
       الكود: a.candidates?.tracking_code || '',
@@ -358,6 +475,7 @@ export default function AdminPage() {
       الوظيفة: `${a.offers?.companies?.name || ''} - ${a.offers?.account_name || ''}`,
       مفضلة: a.is_preferred ? '⭐' : '',
       المرحلة: STAGE_LABELS[a.stage] || a.stage,
+      موعد_الانترفيو: a.interview_at || '',
       التاريخ: formatDate(a.created_at),
     }));
     const headers = Object.keys(rows[0] || {});
@@ -458,6 +576,27 @@ export default function AdminPage() {
               <MiniStat icon={<DollarSign className="h-4 w-4" />} label="عمولات مؤكدة" value={formatCurrency(stats.commission)} accent />
             </div>
 
+            {todayInterviews.length > 0 && (
+              <Card className="border-gold-500/20 bg-gold-500/5">
+                <CardContent className="py-3">
+                  <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-gold-300">
+                    <CalendarDays className="h-4 w-4" />
+                    مقابلات النهارده ({todayInterviews.length})
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {todayInterviews.map((a) => (
+                      <span
+                        key={a.id}
+                        className="rounded-md border border-white/10 bg-midnight-900 px-2 py-1 text-[11px] text-zinc-200"
+                      >
+                        {a.candidates?.triple_name} · {a.offers?.companies?.name}
+                      </span>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <div className="flex flex-col gap-2 sm:flex-row">
               <div className="relative flex-1">
                 <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
@@ -493,7 +632,7 @@ export default function AdminPage() {
                       <Th>الموبايل</Th>
                       <Th>الوظيفة</Th>
                       <Th className="hidden lg:table-cell">اللغة / الخبرة</Th>
-                      <Th>المرحلة</Th>
+                      <Th>المرحلة / الموعد</Th>
                       <Th className="hidden lg:table-cell">التاريخ</Th>
                       <Th>إجراءات</Th>
                     </tr>
@@ -522,6 +661,11 @@ export default function AdminPage() {
                             <span className="mt-1 inline-block rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-zinc-400 tabular-nums" dir="ltr">
                               {a.candidates?.tracking_code || '—'}
                             </span>
+                            {a.stage === 'new' && daysSince(a.created_at) >= 3 && (
+                              <Badge variant="danger" className="mt-1">
+                                متأخر {daysSince(a.created_at)} يوم
+                              </Badge>
+                            )}
                           </Td>
                           <Td>
                             <div className="flex items-center gap-2">
@@ -537,6 +681,23 @@ export default function AdminPage() {
                                 >
                                   <Phone className="h-3.5 w-3.5" />
                                 </a>
+                              )}
+                              {a.candidates?.phone && (
+                                <button
+                                  className="text-zinc-500 hover:text-zinc-300"
+                                  onClick={async () => {
+                                    try {
+                                      await navigator.clipboard.writeText(a.candidates?.phone || '');
+                                      setCopiedPhone(a.candidates!.phone);
+                                      setTimeout(() => setCopiedPhone(null), 1500);
+                                    } catch {}
+                                  }}
+                                >
+                                  <Copy className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                              {copiedPhone === a.candidates?.phone && (
+                                <span className="text-[9px] text-emerald-400">تم ✓</span>
                               )}
                             </div>
                           </Td>
@@ -562,6 +723,13 @@ export default function AdminPage() {
                               onChange={(e) => updateStage(a.id, e.target.value)}
                               options={STAGES.map((s) => ({ value: s, label: STAGE_LABELS[s] }))}
                               className={cn('w-28 text-xs', STAGE_COLORS[a.stage])}
+                            />
+                            <input
+                              type="date"
+                              value={a.interview_at || ''}
+                              onChange={(e) => setInterview(a.id, e.target.value)}
+                              title="موعد الإنترفيو"
+                              className="mt-1 w-28 rounded border border-white/10 bg-midnight-900 px-1 py-0.5 text-[10px] text-zinc-300"
                             />
                           </Td>
                           <Td className="hidden text-[10px] text-zinc-500 lg:table-cell">
@@ -607,17 +775,23 @@ export default function AdminPage() {
                   className="w-full rounded-md border border-white/10 bg-midnight-900 py-2 pl-3 pr-9 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-gold-500/40 focus:outline-none focus:ring-2 focus:ring-gold-500/10"
                 />
               </div>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => {
-                  setEditingId(null);
-                  setOfferForm({ ...emptyOffer });
-                }}
-              >
-                <Plus className="h-4 w-4" />
-                إضافة وظيفة
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setCsvOpen(true)}>
+                  <Upload className="h-4 w-4" />
+                  استيراد CSV
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    setEditingId(null);
+                    setOfferForm({ ...emptyOffer });
+                  }}
+                >
+                  <Plus className="h-4 w-4" />
+                  إضافة وظيفة
+                </Button>
+              </div>
             </div>
 
             <Card>
@@ -673,6 +847,17 @@ export default function AdminPage() {
                             <div className="flex items-center gap-1">
                               <Button variant="outline" size="sm" onClick={() => toggleStatus(o)}>
                                 {o.status === 'active' ? 'إيقاف' : 'تفعيل'}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                title="قالب إعلان واتساب"
+                                onClick={() => {
+                                  setTplOffer(o);
+                                  setTplText((o as any).whatsapp_template || defaultTemplate(o));
+                                }}
+                              >
+                                <FileText className="h-3.5 w-3.5" />
                               </Button>
                               <Button variant="ghost" size="sm" onClick={() => openEdit(o)}>
                                 <Pencil className="h-3.5 w-3.5" />
@@ -779,6 +964,84 @@ export default function AdminPage() {
               >
                 <Copy className="h-4 w-4" />
                 {copied ? 'تم النسخ ✅' : 'نسخ الرسالة'}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {tplOffer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <Card className="max-h-[85vh] w-full max-w-md overflow-y-auto">
+            <CardContent className="space-y-3 pt-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-zinc-100">
+                  قالب إعلان واتساب — {tplOffer.account_name}
+                </h3>
+                <button onClick={() => setTplOffer(null)} className="text-zinc-500 hover:text-zinc-300">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <textarea
+                value={tplText}
+                onChange={(e) => setTplText(e.target.value)}
+                rows={8}
+                className="w-full rounded-md border border-white/10 bg-midnight-900 p-3 text-xs leading-6 text-zinc-200 focus:border-gold-500/40 focus:outline-none"
+              />
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(tplText);
+                    } catch {}
+                  }}
+                >
+                  <Copy className="h-4 w-4" />
+                  نسخ
+                </Button>
+                <Button variant="primary" className="flex-1" onClick={saveTemplate}>
+                  حفظ
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {csvOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <Card className="max-h-[85vh] w-full max-w-md overflow-y-auto">
+            <CardContent className="space-y-3 pt-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-zinc-100">استيراد وظائف بالجملة</h3>
+                <button onClick={() => setCsvOpen(false)} className="text-zinc-500 hover:text-zinc-300">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <p className="rounded-md border border-white/10 bg-midnight-900 p-2 text-[10px] leading-5 text-zinc-400">
+                كل سطر = وظيفة، والحقول مفصولة بفواصل بالترتيب ده:
+                <span dir="ltr" className="mt-1 block text-zinc-300">
+                  Company, Account, Salary, Language, Level, Shift, Location, status
+                </span>
+                مثال:
+                <span dir="ltr" className="block text-zinc-300">
+                  Nova Co, Telesales US, 12K, English, B2, Fixed 4PM-12AM, Maadi, active
+                </span>
+                (لو الشركة مش موجودة هتتعمل تلقائياً)
+              </p>
+              <textarea
+                value={csvText}
+                onChange={(e) => setCsvText(e.target.value)}
+                rows={8}
+                dir="ltr"
+                placeholder="Company, Account, Salary, Language, Level, Shift, Location, active"
+                className="w-full rounded-md border border-white/10 bg-midnight-900 p-3 text-xs leading-6 text-zinc-200 focus:border-gold-500/40 focus:outline-none"
+              />
+              <Button variant="primary" className="w-full" onClick={importCSV}>
+                <Upload className="h-4 w-4" />
+                استيراد
               </Button>
             </CardContent>
           </Card>
