@@ -45,6 +45,7 @@ import {
   X,
   Wallet,
   Briefcase,
+  UserX,
 } from 'lucide-react';
 
 const ADMIN_PASSWORD = 'genesis2026';
@@ -64,6 +65,11 @@ const gradLabels: Record<string, string> = {
 
 const emptyOffer = {
   company_id: '',
+  company_name: '',
+  rec_comm: '1000',
+  tl_comm: '500',
+  um_comm: '300',
+  guarantee_days: '30',
   account_name: '',
   status: 'active',
   language: 'English',
@@ -152,6 +158,9 @@ export default function AdminPage() {
   const refreshOffers = () =>
     api.getAllOffers().then((o) => setOffers(o as any)).catch(() => {});
 
+  const refreshCompanies = () =>
+    api.getCompanies().then(setCompanies).catch(() => {});
+
   const filteredApps = useMemo(() => {
     const q = search.trim().toLowerCase();
     return apps.filter((a) => {
@@ -172,6 +181,7 @@ export default function AdminPage() {
       fresh: apps.filter((a) => a.stage === 'new').length,
       interview: apps.filter((a) => a.stage === 'interview').length,
       hired: hired.length,
+      rejected: apps.filter((a) => a.stage === 'rejected').length,
       commission: hired.reduce(
         (s, a) => s + (a.offers?.companies?.recruiter_commission || 0),
         0
@@ -219,16 +229,54 @@ export default function AdminPage() {
     }
   };
 
+  const deleteCandidate = async (a: AppRow) => {
+    if (
+      !window.confirm(
+        `تحذير: هيتحذف المرشح "${a.candidates?.triple_name}" وكل تقديماته نهائي. متأكد؟`
+      )
+    )
+      return;
+    try {
+      await supabase.delete('applications', `candidate_id=eq.${a.candidate_id}`);
+      await supabase.delete('candidates', `id=eq.${a.candidate_id}`);
+      setApps((list) => list.filter((x) => x.candidate_id !== a.candidate_id));
+    } catch (e) {
+      alert('فشل الحذف: ' + (e as Error).message);
+    }
+  };
+
   const saveOffer = async () => {
     if (!offerForm) return;
-    if (!offerForm.company_id || !offerForm.account_name.trim()) {
-      alert('اختار الشركة واكتب اسم الوظيفة');
+    if (!offerForm.account_name.trim()) {
+      alert('اكتب اسم الوظيفة');
       return;
     }
     setSaving(true);
     try {
+      let companyId = offerForm.company_id;
+      if (companyId === '__new__') {
+        if (!offerForm.company_name.trim()) {
+          alert('اكتب اسم الشركة الجديدة');
+          setSaving(false);
+          return;
+        }
+        const rows = await supabase.insert<any>('companies', {
+          name: offerForm.company_name.trim(),
+          recruiter_commission: parseInt(offerForm.rec_comm, 10) || 0,
+          team_leader_commission: parseInt(offerForm.tl_comm, 10) || 0,
+          unit_manager_commission: parseInt(offerForm.um_comm, 10) || 0,
+          guarantee_days: parseInt(offerForm.guarantee_days, 10) || 30,
+        });
+        companyId = rows[0]?.id;
+        await refreshCompanies();
+      }
+      if (!companyId) {
+        alert('اختار الشركة');
+        setSaving(false);
+        return;
+      }
       const payload = {
-        company_id: offerForm.company_id,
+        company_id: companyId,
         account_name: offerForm.account_name.trim(),
         status: offerForm.status,
         language: offerForm.language,
@@ -280,6 +328,11 @@ export default function AdminPage() {
     setEditingId(o.id);
     setOfferForm({
       company_id: o.company_id,
+      company_name: '',
+      rec_comm: '1000',
+      tl_comm: '500',
+      um_comm: '300',
+      guarantee_days: '30',
       account_name: o.account_name,
       status: o.status,
       language: o.language,
@@ -396,11 +449,12 @@ export default function AdminPage() {
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
         {tab === 'pipeline' && (
           <div className="space-y-5">
-            <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.06] md:grid-cols-5">
+            <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.06] md:grid-cols-3 lg:grid-cols-6">
               <MiniStat icon={<Users className="h-4 w-4" />} label="إجمالي التقديمات" value={String(stats.total)} />
               <MiniStat icon={<Users className="h-4 w-4" />} label="جديد" value={String(stats.fresh)} />
               <MiniStat icon={<Headphones className="h-4 w-4" />} label="إنترفيو" value={String(stats.interview)} />
               <MiniStat icon={<TrendingUp className="h-4 w-4" />} label="تم التوظيف" value={String(stats.hired)} accent />
+              <MiniStat icon={<UserX className="h-4 w-4" />} label="مرفوض" value={String(stats.rejected)} />
               <MiniStat icon={<DollarSign className="h-4 w-4" />} label="عمولات مؤكدة" value={formatCurrency(stats.commission)} accent />
             </div>
 
@@ -441,7 +495,7 @@ export default function AdminPage() {
                       <Th className="hidden lg:table-cell">اللغة / الخبرة</Th>
                       <Th>المرحلة</Th>
                       <Th className="hidden lg:table-cell">التاريخ</Th>
-                      <Th>رسالة</Th>
+                      <Th>إجراءات</Th>
                     </tr>
                   </thead>
                   <tbody>
@@ -462,8 +516,8 @@ export default function AdminPage() {
                         <tr key={a.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
                           <Td>
                             <div className="font-medium text-zinc-100">{a.candidates?.triple_name || '—'}</div>
-                            <div className="mt-0.5 flex items-center gap-1 text-[10px] text-zinc-500">
-                              <span>{a.candidates?.age} سنة · {gradLabels[a.candidates?.grad_status || ''] || '—'}</span>
+                            <div className="mt-0.5 text-[10px] text-zinc-500">
+                              {a.candidates?.age} سنة · {gradLabels[a.candidates?.grad_status || ''] || '—'}
                             </div>
                             <span className="mt-1 inline-block rounded bg-white/5 px-1.5 py-0.5 text-[10px] text-zinc-400 tabular-nums" dir="ltr">
                               {a.candidates?.tracking_code || '—'}
@@ -514,16 +568,21 @@ export default function AdminPage() {
                             {formatDate(a.created_at)}
                           </Td>
                           <Td>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setLeaderMsg(leaderMessage(a));
-                                setCopied(false);
-                              }}
-                            >
-                              <MessageSquare className="h-3.5 w-3.5" />
-                            </Button>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setLeaderMsg(leaderMessage(a));
+                                  setCopied(false);
+                                }}
+                              >
+                                <MessageSquare className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button variant="danger" size="sm" onClick={() => deleteCandidate(a)}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
                           </Td>
                         </tr>
                       ))
@@ -749,8 +808,45 @@ export default function AdminPage() {
                 value={offerForm.company_id}
                 onChange={(e) => setOfferForm({ ...offerForm, company_id: e.target.value })}
                 placeholder="اختار الشركة..."
-                options={companies.map((c) => ({ value: c.id, label: c.name }))}
+                options={[
+                  { value: '__new__', label: '➕ إضافة شركة جديدة...' },
+                  ...companies.map((c) => ({ value: c.id, label: c.name })),
+                ]}
               />
+              {offerForm.company_id === '__new__' && (
+                <div className="grid gap-3 rounded-md border border-gold-500/20 bg-gold-500/5 p-3 sm:grid-cols-2">
+                  <Input
+                    label="اسم الشركة الجديدة *"
+                    value={offerForm.company_name}
+                    onChange={(e) => setOfferForm({ ...offerForm, company_name: e.target.value })}
+                    placeholder="مثال: Nova Solutions"
+                  />
+                  <Input
+                    label="عمولتك (EGP)"
+                    type="number"
+                    value={offerForm.rec_comm}
+                    onChange={(e) => setOfferForm({ ...offerForm, rec_comm: e.target.value })}
+                  />
+                  <Input
+                    label="عمولة الليدر"
+                    type="number"
+                    value={offerForm.tl_comm}
+                    onChange={(e) => setOfferForm({ ...offerForm, tl_comm: e.target.value })}
+                  />
+                  <Input
+                    label="عمولة الـ UM"
+                    type="number"
+                    value={offerForm.um_comm}
+                    onChange={(e) => setOfferForm({ ...offerForm, um_comm: e.target.value })}
+                  />
+                  <Input
+                    label="مدة الضمان (يوم)"
+                    type="number"
+                    value={offerForm.guarantee_days}
+                    onChange={(e) => setOfferForm({ ...offerForm, guarantee_days: e.target.value })}
+                  />
+                </div>
+              )}
               <Input
                 label="اسم الوظيفة *"
                 value={offerForm.account_name}
