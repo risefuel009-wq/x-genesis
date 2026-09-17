@@ -34,6 +34,9 @@ export type Candidate = {
   email: string | null;
   age: number | null;
   site: string;
+  city: string;
+  nationality: string;
+  national_id: string;
   language: string;
   language_level: string | null;
   college: string | null;
@@ -43,6 +46,7 @@ export type Candidate = {
   experience_years: number;
   voice_url: string | null;
   voice_confirmed: boolean;
+  tracking_code: string | null;
   created_at: string;
 };
 
@@ -53,6 +57,7 @@ export type Application = {
   stage: 'new' | 'screening' | 'interview' | 'hired' | 'rejected';
   is_preferred: boolean;
   notes: string | null;
+  interview_at: string | null;
   created_at: string;
   offers?: Offer;
   candidates?: Candidate;
@@ -61,7 +66,7 @@ export type Application = {
 export const LANGUAGES = ['English', 'Arabic', 'French', 'Spanish', 'German'] as const;
 export const LEVELS = ['A1', 'A2', 'B1', 'B1+', 'B2', 'B2+', 'C1', 'C2'] as const;
 export const GRAD_STATUS = ['undergrad', 'grad', 'gap_year', 'dropout'] as const;
-export const MILITARY_STATUS = ['exempted', 'done', 'postponed', 'in_service'] as const;
+export const MILITARY_STATUS = ['exempted', 'done', 'postponed', 'in_service', 'none'] as const;
 export const STAGES = ['new', 'screening', 'interview', 'hired', 'rejected'] as const;
 
 export type Language = (typeof LANGUAGES)[number];
