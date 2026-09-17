@@ -229,10 +229,14 @@ export default function AdminPage() {
 
   const leaderMessage = (a: AppRow) =>
     [
-      'صباح الفل يا فندم 🌟 مرشح جديد يستاهل الفرصة:',
+      ' مرشح جديد  :',
       `الاسم: ${a.candidates?.triple_name || '—'}`,
       `السن: ${a.candidates?.age || '—'} · ${gradLabels[a.candidates?.grad_status || ''] || '—'}`,
+      `الجنسية: ${a.candidates?.nationality || '—'} · الرقم القومي: ${a.candidates?.national_id || '—'}`,
       `اللغة: ${a.candidates?.language || '—'} ${a.candidates?.language_level || ''} · الخبرة: ${experienceLabel(a.candidates?.experience_years || 0)}`,
+      `الإيميل: ${a.candidates?.email || '—'}`,
+      `المدينة: ${a.candidates?.city || '—'}`,
+      `الموقف العسكري: ${militaryLabels[a.candidates?.military_status || ''] || '—'}`,
       `الوظيفة: ${a.offers?.companies?.name || '—'} - ${a.offers?.account_name || '—'}`,
       `المكان: ${a.offers?.location || '—'} · الشيفت: ${a.offers?.shift_type || '—'}`,
       `الراتب: ${a.offers?.salary || 'عند المقابلة'}`,
