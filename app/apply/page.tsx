@@ -38,6 +38,7 @@ const militaryLabels: Record<string, string> = {
   done: 'أديت الخدمة',
   postponed: 'تأجيل',
   in_service: 'في الخدمة حالياً',
+  none: 'أنثى / لا ينطبق',
 };
 
 const experienceOptions = [
@@ -46,6 +47,8 @@ const experienceOptions = [
   { value: '2', label: 'سنتين' },
   { value: '3', label: '3+ سنين' },
 ];
+
+const isValidNationalId = (id: string) => /^\d{14}$/.test(id.trim());
 
 export default function ApplyPage() {
   const [step, setStep] = useState(0);
@@ -63,7 +66,9 @@ export default function ApplyPage() {
     phone: '',
     email: '',
     age: '',
-    site: 'cairo',
+    nationality: 'Egyptian',
+    national_id: '',
+    city: '',
     language: 'English',
     language_level: '',
     college: '',
@@ -94,6 +99,9 @@ export default function ApplyPage() {
         const data = JSON.parse(raw);
         setForm((f) => ({ ...f, ...data.form }));
         setPicked(data.picked || []);
+        if (typeof data.step === 'number' && data.step >= 1 && data.step <= 2) {
+          setStep(data.step);
+        }
         setRestored(true);
       }
     } catch {}
@@ -101,10 +109,10 @@ export default function ApplyPage() {
 
   useEffect(() => {
     const timeout = setTimeout(() => {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ form, picked }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ form, picked, step }));
     }, 500);
     return () => clearTimeout(timeout);
-  }, [form, picked]);
+  }, [form, picked, step]);
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -134,11 +142,16 @@ export default function ApplyPage() {
   );
 
   const s1Valid =
-    form.triple_name.trim().length >= 5 &&
+    form.triple_name.trim().length >= 3 &&
     isValidEgyptianPhone(form.phone) &&
     form.age &&
     parseInt(form.age, 10) >= 16 &&
     parseInt(form.age, 10) <= 60 &&
+    form.nationality.trim().length > 0 &&
+    isValidNationalId(form.national_id) &&
+    form.city.trim().length >= 2 &&
+    form.email.trim().length > 0 &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()) &&
     form.language_level &&
     form.grad_status &&
     form.military_status;
@@ -153,9 +166,12 @@ export default function ApplyPage() {
       const [candidate] = await api.insertCandidate({
         triple_name: form.triple_name.trim(),
         phone: form.phone.trim(),
-        email: form.email.trim() || null,
+        email: form.email.trim(),
         age: parseInt(form.age, 10),
-        site: form.site,
+        site: 'other',
+        city: form.city.trim(),
+        nationality: form.nationality.trim(),
+        national_id: form.national_id.trim(),
         language: form.language,
         language_level: form.language_level,
         college: form.college.trim() || null,
@@ -243,12 +259,13 @@ export default function ApplyPage() {
               onClick={() => {
                 localStorage.removeItem(STORAGE_KEY);
                 setForm({
-                  triple_name: '', phone: '', email: '', age: '', site: 'cairo',
-                  language: 'English', language_level: '', college: '', grad_status: '',
-                  military_status: '', applied_last_3_months: false, experience: '0',
-                  voice_url: '', voice_confirmed: false,
+                  triple_name: '', phone: '', email: '', age: '', nationality: 'Egyptian',
+                  national_id: '', city: '', language: 'English', language_level: '', college: '',
+                  grad_status: '', military_status: '', applied_last_3_months: false,
+                  experience: '0', voice_url: '', voice_confirmed: false,
                 });
                 setPicked([]);
+                setStep(0);
                 setRestored(false);
               }}
             >
@@ -296,10 +313,10 @@ export default function ApplyPage() {
           <Card>
             <CardContent className="space-y-4 pt-6">
               <Input
-                label="الاسم الثلاثي *"
+                label="الاسم الكامل *"
                 value={form.triple_name}
                 onChange={(e) => set('triple_name', e.target.value)}
-                placeholder="مثال: يوسف علاء سعيد"
+                placeholder="مثال: Anne Amr Mohammad Hafez"
               />
               <div className="grid gap-4 md:grid-cols-2">
                 <Input
@@ -318,24 +335,35 @@ export default function ApplyPage() {
                   placeholder="21"
                 />
                 <Input
-                  label="الإيميل"
+                  label="الجنسية *"
+                  value={form.nationality}
+                  onChange={(e) => set('nationality', e.target.value)}
+                  placeholder="Egyptian"
+                />
+                <Input
+                  label="الرقم القومي * (14 رقم)"
+                  value={form.national_id}
+                  onChange={(e) => set('national_id', e.target.value)}
+                  placeholder="30411151307927"
+                  dir="ltr"
+                  hint={form.national_id && !isValidNationalId(form.national_id) ? 'لازم يكون 14 رقم' : ''}
+                />
+                <Input
+                  label="الإيميل *"
                   type="email"
                   value={form.email}
                   onChange={(e) => set('email', e.target.value)}
                   placeholder="you@gmail.com"
                   dir="ltr"
                 />
-                <Select
-                  label="المحافظة"
-                  value={form.site}
-                  onChange={(e) => set('site', e.target.value)}
-                  options={[
-                    { value: 'cairo', label: 'القاهرة' },
-                    { value: 'alex', label: 'الإسكندرية' },
-                  ]}
+                <Input
+                  label="المدينة / المحافظة *"
+                  value={form.city}
+                  onChange={(e) => set('city', e.target.value)}
+                  placeholder="مثال: 6th of October City"
                 />
                 <Select
-                  label="اللغة"
+                  label="اللغة *"
                   value={form.language}
                   onChange={(e) => set('language', e.target.value)}
                   options={LANGUAGES.map((l) => ({ value: l, label: l }))}
@@ -348,13 +376,13 @@ export default function ApplyPage() {
                   options={LEVELS.map((l) => ({ value: l, label: l }))}
                 />
                 <Select
-                  label="سنين الخبرة"
+                  label="سنين الخبرة *"
                   value={form.experience}
                   onChange={(e) => set('experience', e.target.value)}
                   options={experienceOptions}
                 />
                 <Input
-                  label="الكلية"
+                  label="الكلية (اختياري)"
                   value={form.college}
                   onChange={(e) => set('college', e.target.value)}
                   placeholder="مثال: هندسة عين شمس"
@@ -380,7 +408,7 @@ export default function ApplyPage() {
                   }))}
                 />
                 <Select
-                  label="قدمت معانا آخر 3 شهور؟"
+                  label="قدمت معانا آخر 3 شهور؟ *"
                   value={form.applied_last_3_months ? 'yes' : 'no'}
                   onChange={(e) =>
                     set('applied_last_3_months', e.target.value === 'yes')
