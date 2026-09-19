@@ -36,7 +36,7 @@ const gradLabels: Record<string, string> = {
 const militaryLabels: Record<string, string> = {
   exempted: 'معفى',
   done: 'أديت الخدمة',
-  postponed: 'تأجيل',
+  postponed: 'مؤجل',
   in_service: 'في الخدمة حالياً',
   none: 'أنثى / لا ينطبق',
 };
@@ -76,6 +76,7 @@ export default function ApplyPage() {
     military_status: '',
     applied_last_3_months: false,
     experience: '0',
+    experience_details: '',
     voice_url: '',
     voice_confirmed: false,
   });
@@ -150,8 +151,8 @@ export default function ApplyPage() {
     form.nationality.trim().length > 0 &&
     isValidNationalId(form.national_id) &&
     form.city.trim().length >= 2 &&
-    form.email.trim().length > 0 &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()) &&
+    form.experience_details.trim().length >= 3 &&
     form.language_level &&
     form.grad_status &&
     form.military_status;
@@ -179,6 +180,7 @@ export default function ApplyPage() {
         military_status: form.military_status,
         applied_last_3_months: form.applied_last_3_months,
         experience_years: parseInt(form.experience || '0', 10),
+        experience_details: form.experience_details.trim(),
         voice_url: form.voice_url,
         voice_confirmed: form.voice_confirmed,
         tracking_code: code,
@@ -262,7 +264,7 @@ export default function ApplyPage() {
                   triple_name: '', phone: '', email: '', age: '', nationality: 'Egyptian',
                   national_id: '', city: '', language: 'English', language_level: '', college: '',
                   grad_status: '', military_status: '', applied_last_3_months: false,
-                  experience: '0', voice_url: '', voice_confirmed: false,
+                  experience: '0', experience_details: '', voice_url: '', voice_confirmed: false,
                 });
                 setPicked([]);
                 setStep(0);
@@ -346,7 +348,7 @@ export default function ApplyPage() {
                   onChange={(e) => set('national_id', e.target.value)}
                   placeholder="30411151307927"
                   dir="ltr"
-                  hint={form.national_id && !isValidNationalId(form.national_id) ? 'لازم يكون 14 رقم' : ''}
+                  hint={form.national_id && !isValidNationalId(form.national_id) ? 'لازم يكون 14 رقم بالظبط' : ''}
                 />
                 <Input
                   label="الإيميل *"
@@ -419,6 +421,21 @@ export default function ApplyPage() {
                   ]}
                 />
               </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-zinc-300">
+                  تفاصيل خبرتك العملية *
+                </label>
+                <textarea
+                  value={form.experience_details}
+                  onChange={(e) => set('experience_details', e.target.value)}
+                  placeholder="اكتب نبذة عن خبرتك: الشركات، المدة، المهام... لو مفيش خبرة اكتب: بدون خبرة"
+                  rows={4}
+                  className="w-full rounded-md border border-white/10 bg-midnight-900 px-3 py-2.5 text-sm leading-6 text-zinc-100 placeholder:text-zinc-600 focus:border-gold-500/40 focus:outline-none focus:ring-2 focus:ring-gold-500/10"
+                />
+                <p className="mt-1 text-[11px] text-zinc-500">
+                  الخبرة دي هتوصل لليدر كما هي في رسالة الواتساب — وفاكر تقولها في التسجيل الصوتي برضه.
+                </p>
+              </div>
               <Button
                 size="lg"
                 className="w-full"
@@ -452,6 +469,9 @@ export default function ApplyPage() {
                 <p className="mt-2 rounded-md border border-gold-500/20 bg-gold-500/5 p-2 text-[11px] leading-5 text-gold-300">
                   ⚠️ التسجيل بالإنجليزي إجباري لكل الوظائف — مهما كانت لغة الوظيفة نفسها.
                 </p>
+                <p className="mt-2 rounded-md border border-gold-500/20 bg-gold-500/5 p-2 text-[11px] leading-5 text-gold-300">
+                  🎙️ مهم جداً: اذكر خبرتك العملية بالتفصيل في التسجيل — الشركات بتقبل أسرع لما تسمع الخبرة بصوتك.
+                </p>
               </div>
 
               <Button variant="outline" size="lg" className="w-full" asChild>
@@ -480,7 +500,7 @@ export default function ApplyPage() {
                   onChange={(e) => set('voice_confirmed', e.target.checked)}
                   className="h-4 w-4 rounded border-white/10 bg-midnight-900 text-gold-500 focus:ring-gold-500/30"
                 />
-                أؤكد إن مدة التسجيل دقيقتين على الأقل
+                أؤكد إن مدة التسجيل دقيقتين على الأقل وذكرت خبرتي فيه
               </label>
 
               <div className="flex gap-2">
